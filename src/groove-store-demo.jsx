@@ -1,19 +1,15 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, createContext, useContext } from "react";
+import { db } from "./firebase";
+import { collection, addDoc, onSnapshot, query as fsQuery, orderBy, serverTimestamp } from "firebase/firestore";
 
 // ---------------------------------------------------------------------------
-// XIU-Live — 虚拟直播打赏商城 (含主播列表 & 订单历史记录)
+// XIU-Live — 虚拟直播打赏商城 (含主播列表 & 订单历史记录 & 中英文切换)
 // ---------------------------------------------------------------------------
 
 // ===========================================================================
 // 图片映射表 (IMAGE MAP)
 // 这是你唯一需要维护的地方！想换图片，只改这里，不用碰下面的商品列表。
 // 左边是商品的 id（对照 PRODUCTS 数组里的 id），右边是导入的图片变量。
-//
-// 用法：
-// 1. 把图片文件放进 src/pic/ 文件夹
-// 2. 在下面 import 这张图片
-// 3. 在 IMAGE_MAP 里加一行 "商品id": 图片变量
-// 没有配图的商品会自动使用原来的彩色占位符，不会报错。
 // ===========================================================================
 import milkTea from "./pic/milk_tea.webp";
 import water from "./pic/water.webp";
@@ -37,6 +33,12 @@ import iceCream from "./pic/ice cream.png";
 import littleCake from "./pic/little cake.jpg";
 import beer from "./pic/beer_1.png";
 import barbeque from "./pic/barbeque_1.jpg";
+import hamburger from "./pic/hamburger.png";
+import breakfast from "./pic/breakfast.png";
+import hotpot from "./pic/hotpot.jpeg";
+import lolipop from "./pic/lolipop.png";
+import chocolate from "./pic/chocolate.webp";
+import milk from "./pic/milk.png";
 
 // special gifts 特殊礼物
 import lipsStick from "./pic/lips stick.png";
@@ -55,28 +57,32 @@ import heels from "./pic/heels.png";
 import bikini from "./pic/bikini_1.png";
 import fashionDress from "./pic/fashion dress.png";
 import hat from "./pic/hat.png";
+import stocking from "./pic/stocking.png";
 
 // live events 直播互动
 import goHomeEarly from "./pic/go home early one hour.png";
-import points30k from "./pic/30k.png";
 import oneDayOff from "./pic/one day off.png";
-import points80k from "./pic/80k queen battle points 女王PK值80k.jpg";
-import points10k from "./pic/10k queen battle points 女王PK值10k.jpg";
-import doorDance from "./pic/door dance.png";
 import bouquet52 from "./pic/52 bouquet.jpg";
-import bouquet99 from "./pic/99 bouquet.jpg";
-import bouquet20 from "./pic/20 bouquet_1.jpg";
 import gatlingDance from "./pic/gatling dance.png";
 import wasabi from "./pic/one tube of wasabi.png";
 import solo3min from "./pic/normal solo 3mins.png";
 import oneBalutes from "./pic/one balutes.png";
-import sofaDance from "./pic/sofa dance.png";
 import solo1min from "./pic/normal solo 1min.png";
 import facePainting from "./pic/face painting.png";
 import halfDayOff from "./pic/half day off.png";
 import chairDance from "./pic/chair_dance.jpg";
+import boyfriendPOV from "./pic/boyfrined_POV.jpg";
+import blackEgg from "./pic/blackegg.png";
 import testFood1 from "./pic/test.jpg";
 import testFood2 from "./pic/test.jpg";
+
+// punishment 惩罚游戏
+import turnOffFilter from "./pic/turn_off_filter.jpg";
+import turnOffFilterMany from "./pic/turn_off_filter_many.jpg";
+import uglyDance from "./pic/ugly_dance.jpg";
+import chili from "./pic/chili.jpg";
+import wasabi4All from "./pic/wasabi_4_all.jpg";
+import mixTogether4 from "./pic/4_mix_together.jpg";
 
 const IMAGE_MAP = {
   // food 食品类
@@ -98,17 +104,22 @@ const IMAGE_MAP = {
   f16: littleCake,
   f17: beer,
   f18: barbeque,
-  f19: testFood1, 
-  f20: testFood2, 
-  // ⚠️ 原文件名被截断，请确认真实文件名一致
-  // f19 breakfast、f20 pisa 没找到对应图片，暂时留空位用占位符
+  f19: testFood1,
+  f20: testFood2,
+  f21: wineAndLiquors,
+  f22: milk,
+  f23: hamburger,
+  f24: breakfast,
+  f25: hotpot,
+  f26: lolipop,
+  f27: chocolate,
 
   // special gifts 特殊礼物
   gi1: lipsStick,
   gi2: perfume,
-  gi3: braceletHeavy,        // ⚠️ 猜测：加重款金手镯，请确认图对不对
+  gi3: braceletHeavy,
   gi4: lighterGoldBracelet,
-  gi5: braceletPlain,        // ⚠️ 猜测：普通手链/手镯，请确认图对不对
+  gi5: braceletPlain,
   gi6: earrings,
   gi7: necklace,
   gi8: ring,
@@ -120,111 +131,206 @@ const IMAGE_MAP = {
   d4: bikini,
   d5: fashionDress,
   d6: hat,
+  d7: stocking,
 
   // live events 直播互动
   e1: goHomeEarly,
-  e2: points30k,
   e3: oneDayOff,
-  e4: points80k,   // ⚠️ 原文件名被截断，请确认真实文件名一致
-  e5: points10k,   // ⚠️ 原文件名被截断，请确认真实文件名一致
-  e6: doorDance,
+  e6: boyfriendPOV,
   e7: bouquet52,
-  // e8 33 bouquet 没找到对应图片
-  e9: bouquet99,
-  e10: bouquet20,
   e11: gatlingDance,
   e12: wasabi,
   e13: solo3min,
-  // e14 traditional dance、e15 body painting、e16 play game one hour、e17 pole dance 没找到对应图片
+  e14: blackEgg,
   e18: oneBalutes,
-  e19: sofaDance,
   e20: solo1min,
   e21: facePainting,
   e22: halfDayOff,
   e23: chairDance,
+
+  // punishment 惩罚游戏
+  p1: turnOffFilter,
+  p2: turnOffFilterMany,
+  p3: uglyDance,
+  p4: chili,
+  p5: wasabi4All,
+  p6: mixTogether4,
 };
 
-// 主播头像单独一张表，跟商品图片的 IMAGE_MAP 分开，
-// 这样 STREAMERS 的 id (s1, s2...) 就不会跟 PRODUCTS 里的 id 撞车。
+// 主播头像单独一张表
 const AVATAR_MAP = {
-  s1: star,   // star 主播头像
-  s2: judy,   // judy 主播头像
+  s1: star,
+  s2: judy,
 };
 
-const CATEGORIES = ["food 食品类", "special gifts 特殊礼物", "dresses 服饰", "live events 直播互动"];
+// ===========================================================================
+// 语言 (LANGUAGE)
+// 所有界面文字集中放在这里。要改文案，就改这两份对应的文字。
+// ===========================================================================
+const UI_TEXT = {
+  zh: {
+    streamersNav: "主播列表",
+    streamersTitle: "驻场主播列表",
+    search: "搜索",
+    orders: "订单记录",
+    cart: "购物车",
+    bannerTag: "XIU-Live 虚拟礼物打赏平台",
+    bannerTitle: "支持喜爱的主播，解锁房间专属特效",
+    giftsCount: (n) => `${n} 件礼物`,
+    receiverLabel: "选择受赠主播 (Receiver):",
+    addButton: "赠送礼物",
+    added: "已添加 ✓",
+    cartTitle: "打赏礼物清单",
+    emptyCart: "尚未选择打赏礼物。",
+    qty: "数量",
+    remove: "移除",
+    total: "合计打赏",
+    simPayButton: (total) => `模拟 PayPal 快速支付 (${total})`,
+    paySuccess: (id) => `打赏成功！订单编号: ${id}`,
+    ordersTitle: "历史打赏订单记录",
+    noOrders: "暂无历史打赏订单。",
+    orderIdLabel: "订单号",
+    timeLabel: "时间",
+    totalPaidLabel: "总付费",
+    searchPlaceholder: "搜索打赏礼物...",
+    close: "关闭 ✕",
+    live: "直播中",
+    off: "休息中",
+    buyerNameLabel: "你的名字 (购买人):",
+    buyerNamePlaceholder: "请输入你的名字",
+    nameRequiredAlert: "请先填写你的名字，再进行支付",
+    buyerLabel: "购买人",
+    loadingOrders: "订单加载中...",
+  },
+  en: {
+    streamersNav: "Streamers",
+    streamersTitle: "Streamers",
+    search: "Search",
+    orders: "Order History",
+    cart: "Shopping Cart",
+    bannerTag: "XIU-Live Virtual Gift Platform",
+    bannerTitle: "Support your favorite streamers, unlock exclusive room effects",
+    giftsCount: (n) => `${n} gifts`,
+    receiverLabel: "Choose Receiver:",
+    addButton: "Add Gift",
+    added: "Added ✓",
+    cartTitle: "Gift Cart",
+    emptyCart: "No gifts selected yet.",
+    qty: "Qty",
+    remove: "Remove",
+    total: "Total",
+    simPayButton: (total) => `Simulated PayPal Payment (${total})`,
+    paySuccess: (id) => `Payment successful! Order ID: ${id}`,
+    ordersTitle: "Order History",
+    noOrders: "No orders yet.",
+    orderIdLabel: "Order ID",
+    timeLabel: "Time",
+    totalPaidLabel: "Total Paid",
+    searchPlaceholder: "Search gifts...",
+    close: "Close ✕",
+    live: "Live",
+    off: "Offline",
+    buyerNameLabel: "Your Name (Buyer):",
+    buyerNamePlaceholder: "Enter your name",
+    nameRequiredAlert: "Please enter your name before paying",
+    buyerLabel: "Buyer",
+    loadingOrders: "Loading orders...",
+  },
+};
+
+const LangContext = createContext({ lang: "zh", t: UI_TEXT.zh });
+
+function useLang() {
+  return useContext(LangContext);
+}
+
+const CATEGORIES = [
+  { id: "food", zh: "食品类", en: "Food" },
+  { id: "gifts", zh: "特殊礼物", en: "Special Gifts" },
+  { id: "dresses", zh: "服饰", en: "Dresses" },
+  { id: "events", zh: "直播互动", en: "Live Events" },
+  { id: "punishment", zh: "惩罚游戏", en: "Punishment Games" },
+];
 
 // 1. 主播列表数据
 const STREAMERS = [
-  { id: "s1", name: "star", room: "Room 8888", status: "直播中 Live" },
-  { id: "s2", name: "judy", room: "Room 6666", status: "直播中 Live" },
+  { id: "s1", name: "star", room: "sirens520", live: true },
+  { id: "s2", name: "judy", room: "sirens520", live: true },
 ];
 
-// 2. 57 件虚拟礼物商品
+// 2. 虚拟礼物商品
+// nameZh / nameEn 分别是中文名和英文名，切换语言时会自动显示对应的那一份。
 const PRODUCTS = [
-  // food 食品类 (20件)
-  { id: "f1", name: "milk tea 奶茶", category: "food 食品类", price: 50, salePrice: 45, art: "#D9A441" },
-  { id: "f2", name: "water 水", category: "food 食品类", price: 10, salePrice: 9, art: "#3E6259" },
-  { id: "f3", name: "fruit plate 水果拼盘", category: "food 食品类", price: 50, salePrice: 45, art: "#8C5E3C" },
-  { id: "f4", name: "lunch 午餐", category: "food 食品类", price: 100, salePrice: 90, art: "#B24C3A" },
-  { id: "f5", name: "noodles 面条", category: "food 食品类", price: 50, salePrice: 45, art: "#6B4E71" },
-  { id: "f6", name: "cake 蛋糕", category: "food 食品类", price: 200, salePrice: 180, art: "#2B4747" },
-  { id: "f7", name: "wine and liquors 红酒洋酒", category: "food 食品类", price: 300, salePrice: 270, art: "#C97B4A" },
-  { id: "f8", name: "yogurt 酸奶", category: "food 食品类", price: 30, salePrice: 27, art: "#9C8B6E" },
-  { id: "f9", name: "juice 果汁", category: "food 食品类", price: 30, salePrice: 27, art: "#5F574C" },
-  { id: "f10", name: "fancy meal 豪华大餐", category: "food 食品类", price: 1000, salePrice: 900, art: "#D9A441" },
-  { id: "f11", name: "coke cola 可乐", category: "food 食品类", price: 30, salePrice: 27, art: "#8C5E3C" },
-  { id: "f12", name: "snack 零食", category: "food 食品类", price: 30, salePrice: 27, art: "#3E6259" },
-  { id: "f13", name: "peking duck 北京烤鸭", category: "food 食品类", price: 100, salePrice: 90, art: "#B24C3A" },
-  { id: "f14", name: "chinese liquor 白酒", category: "food 食品类", price: 100, salePrice: 90, art: "#6B4E71" },
-  { id: "f15", name: "ice cream 冰淇淋", category: "food 食品类", price: 30, salePrice: 27, art: "#2B4747" },
-  { id: "f16", name: "little cake 小蛋糕", category: "food 食品类", price: 50, salePrice: 45, art: "#C97B4A" },
-  { id: "f17", name: "beer 啤酒", category: "food 食品类", price: 60, salePrice: 54, art: "#9C8B6E" },
-  { id: "f18", name: "barbeque 烧烤", category: "food 食品类", price: 400, salePrice: 360, art: "#5F574C" },
-  { id: "f19", name: "test food 1", category: "food 食品类", price: 200, salePrice: 1, art: "#D9A441" },
-  { id: "f20", name: "test food 2", category: "food 食品类", price: 100, salePrice: 0.01, art: "#8C5E3C" },
+  // food 食品类
+  { id: "f1", nameZh: "奶茶", nameEn: "Milk Tea", category: "food", price: 50, salePrice: 45, art: "#D9A441" },
+  { id: "f2", nameZh: "水", nameEn: "Water", category: "food", price: 10, salePrice: 9, art: "#3E6259" },
+  { id: "f3", nameZh: "水果拼盘", nameEn: "Fruit Plate", category: "food", price: 50, salePrice: 45, art: "#8C5E3C" },
+  { id: "f4", nameZh: "午餐", nameEn: "Lunch", category: "food", price: 100, salePrice: 90, art: "#B24C3A" },
+  { id: "f5", nameZh: "面条", nameEn: "Noodles", category: "food", price: 50, salePrice: 45, art: "#6B4E71" },
+  { id: "f6", nameZh: "蛋糕", nameEn: "Cake", category: "food", price: 200, salePrice: 180, art: "#2B4747" },
+  { id: "f7", nameZh: "红酒", nameEn: "Red Wine", category: "food", price: 180, salePrice: 180, art: "#C97B4A" },
+  { id: "f8", nameZh: "酸奶", nameEn: "Yogurt", category: "food", price: 18, salePrice: 18, art: "#9C8B6E" },
+  { id: "f9", nameZh: "果汁", nameEn: "Juice", category: "food", price: 30, salePrice: 27, art: "#5F574C" },
+  { id: "f10", nameZh: "团队聚餐（1 team together）", nameEn: "Fancy Meal (1 Team Together)", category: "food", price: 1000, salePrice: 900, art: "#D9A441" },
+  { id: "f11", nameZh: "可乐", nameEn: "Coca-Cola", category: "food", price: 30, salePrice: 27, art: "#8C5E3C" },
+  { id: "f12", nameZh: "零食", nameEn: "Snack", category: "food", price: 18, salePrice: 18, art: "#3E6259" },
+  { id: "f13", nameZh: "北京烤鸭", nameEn: "Peking Duck", category: "food", price: 100, salePrice: 90, art: "#B24C3A" },
+  { id: "f14", nameZh: "白酒", nameEn: "Chinese Liquor", category: "food", price: 100, salePrice: 90, art: "#6B4E71" },
+  { id: "f15", nameZh: "冰淇淋", nameEn: "Ice Cream", category: "food", price: 18, salePrice: 18, art: "#2B4747" },
+  { id: "f16", nameZh: "小蛋糕", nameEn: "Little Cake", category: "food", price: 50, salePrice: 45, art: "#C97B4A" },
+  { id: "f17", nameZh: "啤酒", nameEn: "Beer", category: "food", price: 48, salePrice: 48, art: "#9C8B6E" },
+  { id: "f18", nameZh: "烧烤", nameEn: "Barbeque", category: "food", price: 400, salePrice: 360, art: "#5F574C" },
+  { id: "f19", nameZh: "测试食物 1", nameEn: "Test Food 1", category: "food", price: 200, salePrice: 1, art: "#D9A441" },
+  { id: "f20", nameZh: "测试食物 2", nameEn: "Test Food 2", category: "food", price: 100, salePrice: 0.01, art: "#8C5E3C" },
+  { id: "f21", nameZh: "洋酒", nameEn: "Liquor", category: "food", price: 180, salePrice: 180, art: "#8C5E3C" },
+  { id: "f22", nameZh: "牛奶", nameEn: "Milk", category: "food", price: 18, salePrice: 18, art: "#F2E9DC" },
+  { id: "f23", nameZh: "汉堡", nameEn: "Hamburger", category: "food", price: 40, salePrice: 40, art: "#B24C3A" },
+  { id: "f24", nameZh: "早餐", nameEn: "Breakfast", category: "food", price: 40, salePrice: 40, art: "#D9A441" },
+  { id: "f25", nameZh: "火锅", nameEn: "Hotpot", category: "food", price: 360, salePrice: 360, art: "#B24C3A" },
+  { id: "f26", nameZh: "棒棒糖", nameEn: "Lollipop", category: "food", price: 9, salePrice: 9, art: "#C97B4A" },
+  { id: "f27", nameZh: "巧克力", nameEn: "Chocolate", category: "food", price: 100, salePrice: 100, art: "#5F574C" },
 
-  // special gifts 特殊礼物 (8件)
-  { id: "gi1", name: "lips stick 口红", category: "special gifts 特殊礼物", price: 200, salePrice: 180, art: "#D9A441" },
-  { id: "gi2", name: "perfume 香水", category: "special gifts 特殊礼物", price: 800, salePrice: 720, art: "#3E6259" },
-  { id: "gi3", name: "heavier gold bracelet 加重款金手镯", category: "special gifts 特殊礼物", price: 8000, salePrice: 7000, art: "#B24C3A" },
-  { id: "gi4", name: "lighter gold bracelet 轻款金手镯", category: "special gifts 特殊礼物", price: 4500, salePrice: 4000, art: "#2B4747" },
-  { id: "gi5", name: "bracelet 手链/手镯", category: "special gifts 特殊礼物", price: 300, salePrice: 270, art: "#6B4E71" },
-  { id: "gi6", name: "earrings 耳环", category: "special gifts 特殊礼物", price: 300, salePrice: 270, art: "#C97B4A" },
-  { id: "gi7", name: "necklace 项链", category: "special gifts 特殊礼物", price: 300, salePrice: 270, art: "#9C8B6E" },
-  { id: "gi8", name: "ring 戒指", category: "special gifts 特殊礼物", price: 500, salePrice: 450, art: "#5F574C" },
+  // special gifts 特殊礼物
+  { id: "gi1", nameZh: "口红", nameEn: "Lipstick", category: "gifts", price: 200, salePrice: 180, art: "#D9A441" },
+  { id: "gi2", nameZh: "香水", nameEn: "Perfume", category: "gifts", price: 800, salePrice: 720, art: "#3E6259" },
+  { id: "gi3", nameZh: "加重款金手镯", nameEn: "Heavy Gold Bracelet", category: "gifts", price: 8000, salePrice: 7000, art: "#B24C3A" },
+  { id: "gi4", nameZh: "轻款金手镯", nameEn: "Light Gold Bracelet", category: "gifts", price: 4500, salePrice: 4000, art: "#2B4747" },
+  { id: "gi5", nameZh: "手链/手镯", nameEn: "Bracelet", category: "gifts", price: 300, salePrice: 270, art: "#6B4E71" },
+  { id: "gi6", nameZh: "耳环", nameEn: "Earrings", category: "gifts", price: 300, salePrice: 270, art: "#C97B4A" },
+  { id: "gi7", nameZh: "项链", nameEn: "Necklace", category: "gifts", price: 300, salePrice: 270, art: "#9C8B6E" },
+  { id: "gi8", nameZh: "戒指", nameEn: "Ring", category: "gifts", price: 500, salePrice: 450, art: "#5F574C" },
 
-  // dresses 服饰 (6件)
-  { id: "d1", name: "traditional dress 传统服饰", category: "dresses 服饰", price: 300, salePrice: 270, art: "#6B4E71" },
-  { id: "d2", name: "fancy dress 华丽礼服", category: "dresses 服饰", price: 1000, salePrice: 900, art: "#B24C3A" },
-  { id: "d3", name: "heels 高跟鞋", category: "dresses 服饰", price: 200, salePrice: 180, art: "#D9A441" },
-  { id: "d4", name: "bikini 比基尼", category: "dresses 服饰", price: 200, salePrice: 180, art: "#3E6259" },
-  { id: "d5", name: "fashion dress 时尚连衣裙", category: "dresses 服饰", price: 200, salePrice: 180, art: "#C97B4A" },
-  { id: "d6", name: "hat 帽子", category: "dresses 服饰", price: 100, salePrice: 90, art: "#8C5E3C" },
+  // dresses 服饰
+  { id: "d1", nameZh: "传统服饰", nameEn: "Traditional Dress", category: "dresses", price: 300, salePrice: 270, art: "#6B4E71" },
+  { id: "d2", nameZh: "华丽礼服", nameEn: "Fancy Dress", category: "dresses", price: 1000, salePrice: 900, art: "#B24C3A" },
+  { id: "d3", nameZh: "高跟鞋", nameEn: "Heels", category: "dresses", price: 200, salePrice: 180, art: "#D9A441" },
+  { id: "d4", nameZh: "比基尼", nameEn: "Bikini", category: "dresses", price: 200, salePrice: 180, art: "#3E6259" },
+  { id: "d5", nameZh: "时尚连衣裙", nameEn: "Fashion Dress", category: "dresses", price: 200, salePrice: 180, art: "#C97B4A" },
+  { id: "d6", nameZh: "帽子", nameEn: "Hat", category: "dresses", price: 100, salePrice: 90, art: "#8C5E3C" },
+  { id: "d7", nameZh: "丝袜", nameEn: "Stockings", category: "dresses", price: 50, salePrice: 50, art: "#6B4E71" },
 
-  // live events 直播互动 (23件)
-  { id: "e1", name: "go home early one hour 提前下播一小时", category: "live events 直播互动", price: 300, salePrice: 270, art: "#B24C3A" },
-  { id: "e2", name: "30k queen battle points 女王PK值30k", category: "live events 直播互动", price: 300, salePrice: 270, art: "#D9A441" },
-  { id: "e3", name: "one day off 请假一天", category: "live events 直播互动", price: 1200, salePrice: 1080, art: "#3E6259" },
-  { id: "e4", name: "80k queen battle points 女王PK值80k", category: "live events 直播互动", price: 800, salePrice: 720, art: "#8C5E3C" },
-  { id: "e5", name: "10k queen battle points 女王PK值10k", category: "live events 直播互动", price: 100, salePrice: 90, art: "#6B4E71" },
-  { id: "e6", name: "door dance 门口热舞", category: "live events 直播互动", price: 50, salePrice: 45, art: "#C97B4A" },
-  { id: "e7", name: "52 bouquet 52朵花束", category: "live events 直播互动", price: 520, salePrice: 468, art: "#2B4747" },
-  // { id: "e8", name: "33 bouquet 33朵花束", category: "live events 直播互动", price: 330, salePrice: 297, art: "#9C8B6E" },
-  { id: "e9", name: "99 bouquet 99朵花束", category: "live events 直播互动", price: 990, salePrice: 891, art: "#5F574C" },
-  { id: "e10", name: "33 bouquet 33朵花束", category: "live events 直播互动", price: 200, salePrice: 180, art: "#D9A441" },
-  { id: "e11", name: "gatling dance 机关枪热舞", category: "live events 直播互动", price: 10, salePrice: 9, art: "#B24C3A" },
-  { id: "e12", name: "one tube of wasabi 一管芥末", category: "live events 直播互动", price: 300, salePrice: 270, art: "#3E6259" },
-  { id: "e13", name: "normal solo dance 3mins 独舞3分钟", category: "live events 直播互动", price: 300, salePrice: 300, art: "#6B4E71" },
-  // { id: "e14", name: "traditional dance 传统舞蹈", category: "live events 直播互动", price: 50, salePrice: 45, art: "#8C5E3C" },
-  // { id: "e15", name: "body painting 人体彩绘", category: "live events 直播互动", price: 100, salePrice: 90, art: "#2B4747" },
-  // { id: "e16", name: "solo dance 1min 独舞1分钟", category: "live events 直播互动", price: 200, salePrice: 180, art: "#C97B4A" },
-  // { id: "e17", name: "pole dance 钢管舞", category: "live events 直播互动", price: 50, salePrice: 45, art: "#9C8B6E" },
-  { id: "e18", name: "one balutes 一颗鸭仔蛋", category: "live events 直播互动", price: 100, salePrice: 90, art: "#5F574C" },
-  { id: "e19", name: "sofa dance 沙发热舞", category: "live events 直播互动", price: 50, salePrice: 45, art: "#D9A441" },
-  { id: "e20", name: "normal solo dance 1min 独舞1分钟", category: "live events 直播互动", price: 10, salePrice: 9, art: "#B24C3A" },
-  { id: "e21", name: "face painting 面部彩绘", category: "live events 直播互动", price: 100, salePrice: 90, art: "#3E6259" },
-  { id: "e22", name: "half day off 请假半天", category: "live events 直播互动", price: 800, salePrice: 720, art: "#6B4E71" },
-  { id: "e23", name: "chair dance 椅子热舞", category: "live events 直播互动", price: 50, salePrice: 45, art: "#C97B4A" },
+  // live events 直播互动
+  { id: "e1", nameZh: "提前下播一小时", nameEn: "Go Home 1 Hour Early", category: "events", price: 300, salePrice: 270, art: "#B24C3A" },
+  { id: "e3", nameZh: "请假一天", nameEn: "One Day Off", category: "events", price: 900, salePrice: 900, art: "#3E6259" },
+  { id: "e6", nameZh: "男友视角舞蹈", nameEn: "Boyfriend POV Dance", category: "events", price: 50, salePrice: 50, art: "#D9A441" },
+  { id: "e7", nameZh: "玫瑰花束（9朵）", nameEn: "Rose Bouquet (9 Roses)", category: "events", price: 100, salePrice: 100, art: "#B24C3A" },
+  { id: "e11", nameZh: "机关枪热舞", nameEn: "Gatling Dance", category: "events", price: 10, salePrice: 9, art: "#B24C3A" },
+  { id: "e12", nameZh: "一管芥末", nameEn: "One Tube of Wasabi", category: "events", price: 300, salePrice: 270, art: "#3E6259" },
+  { id: "e13", nameZh: "独舞 3 分钟", nameEn: "Solo Dance (3 min)", category: "events", price: 300, salePrice: 300, art: "#6B4E71" },
+  { id: "e14", nameZh: "黑蛋", nameEn: "Black Egg", category: "events", price: 90, salePrice: 90, art: "#2B4747" },
+  { id: "e18", nameZh: "活珠子", nameEn: "Balut (Live Egg)", category: "events", price: 50, salePrice: 50, art: "#5F574C" },
+  { id: "e20", nameZh: "独舞 1 分钟", nameEn: "Solo Dance (1 min)", category: "events", price: 10, salePrice: 9, art: "#B24C3A" },
+  { id: "e21", nameZh: "面部彩绘", nameEn: "Face Painting", category: "events", price: 100, salePrice: 90, art: "#3E6259" },
+  { id: "e22", nameZh: "请假半天", nameEn: "Half Day Off", category: "events", price: 450, salePrice: 450, art: "#6B4E71" },
+  { id: "e23", nameZh: "椅子热舞", nameEn: "Chair Dance", category: "events", price: 50, salePrice: 45, art: "#C97B4A" },
+
+  // punishment 惩罚游戏
+  { id: "p1", nameZh: "关美颜（单个）", nameEn: "Turn Off Beauty Filter (One)", category: "punishment", price: 50, salePrice: 50, art: "#5F574C" },
+  { id: "p2", nameZh: "全场关美颜", nameEn: "Turn Off All Filters", category: "punishment", price: 200, salePrice: 200, art: "#2B4747" },
+  { id: "p3", nameZh: "丑舞", nameEn: "Ugly Dance", category: "punishment", price: 30, salePrice: 30, art: "#8C5E3C" },
+  { id: "p4", nameZh: "辣椒", nameEn: "Chili Pepper", category: "punishment", price: 48, salePrice: 48, art: "#B24C3A" },
+  { id: "p5", nameZh: "一口（醋/酱油/牙膏，任选一个）", nameEn: "One Bite (Vinegar / Soy Sauce / Toothpaste, pick one)", category: "punishment", price: 28, salePrice: 28, art: "#3E6259" },
+  { id: "p6", nameZh: "芥末+醋+酱油+牙膏 混在一起", nameEn: "All Four Combined (Wasabi + Vinegar + Soy Sauce + Toothpaste)", category: "punishment", price: 100, salePrice: 100, art: "#D9A441" },
 ];
 
 function Money({ value }) {
@@ -241,7 +347,6 @@ function ProductArtPlaceholder({ name, color }) {
       <div className="w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold mb-2" style={{ backgroundColor: color, color: "#181614" }}>
         {name.slice(0, 1).toUpperCase()}
       </div>
-      <span className="text-xs text-[#A79A87] italic">[可放置图片]</span>
       <div className="absolute top-2 right-2 rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-[#D9A441]">
         虚拟特效
       </div>
@@ -250,13 +355,13 @@ function ProductArtPlaceholder({ name, color }) {
 }
 
 // 真图组件：如果 IMAGE_MAP 里有这个商品的图，就显示真图；否则退回占位符
-function ProductArt({ product }) {
+function ProductArt({ product, displayName }) {
   const image = IMAGE_MAP[product.id];
 
   if (image) {
     return (
       <div className="relative aspect-square w-full overflow-hidden rounded-sm border border-[#2A2724]">
-        <img src={image} alt={product.name} className="h-full w-full object-cover" />
+        <img src={image} alt={displayName} className="h-full w-full object-cover" />
         <div className="absolute top-2 right-2 rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-[#D9A441]">
           虚拟特效
         </div>
@@ -264,17 +369,19 @@ function ProductArt({ product }) {
     );
   }
 
-  return <ProductArtPlaceholder name={product.name} color={product.art} />;
+  return <ProductArtPlaceholder name={displayName} color={product.art} />;
 }
 
 // 单个商品卡片（包含 Receiver 可选）
 function ProductCard({ product, onAdd }) {
+  const { lang, t } = useLang();
   const [justAdded, setJustAdded] = useState(false);
   const [receiver, setReceiver] = useState(STREAMERS[0].name);
   const onSale = product.salePrice != null;
+  const displayName = lang === "zh" ? product.nameZh : product.nameEn;
 
   const handleAdd = () => {
-    onAdd(product, receiver);
+    onAdd(product, receiver, displayName);
     setJustAdded(true);
     setTimeout(() => setJustAdded(false), 1000);
   };
@@ -282,9 +389,9 @@ function ProductCard({ product, onAdd }) {
   return (
     <div className="group flex flex-col justify-between rounded-sm border border-[#2A2724] bg-[#1F1C19] p-3 hover:border-[#443F3A] transition-all">
       <div>
-        <ProductArt product={product} />
+        <ProductArt product={product} displayName={displayName} />
         <div className="mt-3">
-          <p className="font-serif text-[15px] font-medium leading-snug text-[#F2E9DC]">{product.name}</p>
+          <p className="font-serif text-[15px] font-medium leading-snug text-[#F2E9DC]">{displayName}</p>
           <p className="mt-1 text-sm text-[#A79A87]">
             {onSale ? (
               <>
@@ -299,8 +406,7 @@ function ProductCard({ product, onAdd }) {
       </div>
 
       <div className="mt-4 border-t border-[#2A2724] pt-3">
-        {/* 选择受赠主播 Receiver */}
-        <label className="block text-[11px] text-[#7A7064] mb-1">选择受赠主播 (Receiver):</label>
+        <label className="block text-[11px] text-[#7A7064] mb-1">{t.receiverLabel}</label>
         <select
           value={receiver}
           onChange={(e) => setReceiver(e.target.value)}
@@ -321,7 +427,7 @@ function ProductCard({ product, onAdd }) {
               : "border-[#443F3A] text-[#F2E9DC] hover:border-[#D9A441] hover:text-[#D9A441]"
           }`}
         >
-          {justAdded ? "Added ✓" : "赠送礼物 / Add"}
+          {justAdded ? t.added : t.addButton}
         </button>
       </div>
     </div>
@@ -329,7 +435,8 @@ function ProductCard({ product, onAdd }) {
 }
 
 // PayPal 结算组
-function PayPalCheckout({ total, onSuccess }) {
+function PayPalCheckout({ total, buyerName, onSuccess }) {
+  const { t } = useLang();
   const containerRef = useRef(null);
 
   useEffect(() => {
@@ -344,6 +451,10 @@ function PayPalCheckout({ total, onSuccess }) {
     const buttons = window.paypal.Buttons({
       style: { layout: "vertical", color: "gold", shape: "rect", label: "paypal" },
       createOrder: (data, actions) => {
+        if (!buyerName.trim()) {
+          alert(t.nameRequiredAlert);
+          throw new Error("buyer name required");
+        }
         return actions.order.create({
           purchase_units: [{ amount: { value: total.toFixed(2), currency_code: "USD" } }],
         });
@@ -362,54 +473,69 @@ function PayPalCheckout({ total, onSuccess }) {
     return () => {
       if (containerRef.current) containerRef.current.innerHTML = "";
     };
-  }, [total]);
+  }, [total, buyerName]);
 
   return (
     <div className="mt-4">
       <div ref={containerRef} />
-      {/* 若未接入标准PayPal SDK，提供简易测试支付入口 */}
       {!window.paypal && (
         <button
-          onClick={() =>
+          onClick={() => {
+            if (!buyerName.trim()) {
+              alert(t.nameRequiredAlert);
+              return;
+            }
             onSuccess({
               id: "SIM-" + Date.now(),
-              payer: { name: { given_name: "Valued Supporter" } },
-            })
-          }
+              payer: { name: { given_name: buyerName.trim() } },
+            });
+          }}
           className="mt-2 w-full rounded-sm bg-[#D9A441] py-2 text-xs font-semibold text-[#181614] hover:bg-[#b88a33]"
         >
-          模拟 PayPal 快速支付 (<Money value={total} />)
+          {t.simPayButton(`$${total.toFixed(2)}`)}
         </button>
       )}
     </div>
   );
 }
 
-export default function XiuLiveStore() {
+function StoreContent() {
+  const { lang, t } = useLang();
   const [cartOpen, setCartOpen] = useState(false);
   const [ordersOpen, setOrdersOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [cart, setCart] = useState([]);
+  const [buyerName, setBuyerName] = useState("");
 
-  // 本地订单记录 State
-  const [orders, setOrders] = useState(() => {
-    const saved = localStorage.getItem("xiu_orders");
-    return saved ? JSON.parse(saved) : [];
-  });
+  // 订单记录：现在从 Firebase 实时读取，所有访问者看到的是同一份数据
+  const [orders, setOrders] = useState([]);
+  const [ordersLoading, setOrdersLoading] = useState(true);
 
   useEffect(() => {
-    localStorage.setItem("xiu_orders", JSON.stringify(orders));
-  }, [orders]);
+    const q = fsQuery(collection(db, "orders"), orderBy("createdAt", "desc"));
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        setOrders(snapshot.docs.map((doc) => ({ docId: doc.id, ...doc.data() })));
+        setOrdersLoading(false);
+      },
+      (err) => {
+        console.error("Firestore 读取订单失败:", err);
+        setOrdersLoading(false);
+      }
+    );
+    return () => unsubscribe();
+  }, []);
 
-  const addToCart = (product, receiver) => {
+  const addToCart = (product, receiver, displayName) => {
     setCart((prev) => {
       const price = product.salePrice ?? product.price;
       const existing = prev.find((i) => i.id === product.id && i.receiver === receiver);
       if (existing) {
         return prev.map((i) => (i.id === product.id && i.receiver === receiver ? { ...i, qty: i.qty + 1 } : i));
       }
-      return [...prev, { id: product.id, name: product.name, price, receiver, qty: 1 }];
+      return [...prev, { id: product.id, name: displayName, price, receiver, qty: 1 }];
     });
   };
 
@@ -419,33 +545,44 @@ export default function XiuLiveStore() {
   const cartCount = cart.reduce((sum, i) => sum + i.qty, 0);
   const cartTotal = cart.reduce((sum, i) => sum + i.qty * i.price, 0);
 
-  // 记录生成的完整订单
-  const handlePaymentSuccess = (details) => {
+  const handlePaymentSuccess = async (details) => {
     const newOrder = {
       orderId: details.id || "ORD-" + Date.now(),
       date: new Date().toLocaleString(),
-      payer: details.payer?.name?.given_name || "Anonymous",
+      buyerName: buyerName.trim(),
+      payer: details.payer?.name?.given_name || buyerName.trim() || "Anonymous",
       items: [...cart],
       totalAmount: cartTotal,
       status: "COMPLETED",
+      createdAt: serverTimestamp(),
     };
 
-    setOrders((prev) => [newOrder, ...prev]);
+    try {
+      await addDoc(collection(db, "orders"), newOrder);
+    } catch (err) {
+      console.error("保存订单到 Firebase 失败:", err);
+      alert("订单保存失败，请检查网络或 Firebase 配置后重试。");
+      return;
+    }
+
     setCart([]);
     setCartOpen(false);
     setOrdersOpen(true);
-    alert(`打赏成功！订单编号: ${newOrder.orderId}`);
+    alert(t.paySuccess(newOrder.orderId));
   };
 
   const searchResults = useMemo(() => {
     if (!query.trim()) return [];
     const q = query.toLowerCase();
-    return PRODUCTS.filter((p) => p.name.toLowerCase().includes(q));
-  }, [query]);
+    return PRODUCTS.filter((p) => {
+      const name = lang === "zh" ? p.nameZh : p.nameEn;
+      return name.toLowerCase().includes(q);
+    });
+  }, [query, lang]);
 
   const grouped = CATEGORIES.map((cat) => ({
     category: cat,
-    items: PRODUCTS.filter((p) => p.category === cat),
+    items: PRODUCTS.filter((p) => p.category === cat.id),
   }));
 
   return (
@@ -456,29 +593,31 @@ export default function XiuLiveStore() {
           <div className="flex items-center gap-8">
             <span className="font-serif text-xl font-bold tracking-wide text-[#D9A441]">XIU-Live</span>
             <nav className="hidden gap-6 text-sm text-[#C9BCA8] md:flex">
-              <a href="#streamers" className="text-[#D9A441] hover:underline">Streamers主播列表</a>
+              <a href="#streamers" className="text-[#D9A441] hover:underline">{t.streamersNav}</a>
               {CATEGORIES.map((c) => (
-                <a key={c} href={`#${c}`} className="hover:text-[#F2E9DC]">
-                  {c}
+                <a key={c.id} href={`#${c.id}`} className="hover:text-[#F2E9DC]">
+                  {lang === "zh" ? c.zh : c.en}
                 </a>
               ))}
             </nav>
           </div>
 
           <div className="flex items-center gap-5 text-sm text-[#C9BCA8]">
+            <LangToggle />
+
             <button onClick={() => setSearchOpen(true)} className="hover:text-[#F2E9DC]">
-              搜索Search
+              {t.search}
             </button>
 
             <button onClick={() => setOrdersOpen(true)} className="hover:text-[#F2E9DC] relative">
-              订单记录
+              {t.orders}
               {orders.length > 0 && (
                 <span className="ml-1 inline-block h-2 w-2 rounded-full bg-[#D9A441]"></span>
               )}
             </button>
 
             <button onClick={() => setCartOpen(true)} className="relative text-[#D9A441]">
-              Shopping Cart购物车
+              {t.cart}
               {cartCount > 0 && (
                 <span className="absolute -right-3 -top-2 flex h-4 w-4 items-center justify-center rounded-full bg-[#D9A441] text-[10px] font-semibold text-[#181614]">
                   {cartCount}
@@ -491,16 +630,16 @@ export default function XiuLiveStore() {
 
       {/* Banner */}
       <section className="mx-auto max-w-6xl px-6 pt-10 pb-4">
-        <p className="text-xs uppercase tracking-[0.2em] text-[#D9A441]">XIU-Live 虚拟礼物打赏平台</p>
+        <p className="text-xs uppercase tracking-[0.2em] text-[#D9A441]">{t.bannerTag}</p>
         <h1 className="mt-2 font-serif text-3xl font-bold text-[#F2E9DC] md:text-4xl">
-          支持喜爱的主播，解锁房间专属特效
+          {t.bannerTitle}
         </h1>
       </section>
 
-      {/* 新增: 主播列表 Showcase */}
+      {/* 主播列表 Showcase */}
       <section id="streamers" className="mx-auto max-w-6xl px-6 py-6 scroll-mt-20">
         <div className="rounded-sm border border-[#2A2724] bg-[#1F1C19] p-4">
-          <h2 className="font-serif text-lg text-[#D9A441] mb-3">Streamers驻场主播列表 </h2>
+          <h2 className="font-serif text-lg text-[#D9A441] mb-3">{t.streamersTitle}</h2>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             {STREAMERS.map((s) => {
               const avatarImg = AVATAR_MAP[s.id];
@@ -519,10 +658,10 @@ export default function XiuLiveStore() {
                   <p className="text-[11px] text-[#7A7064]">{s.room}</p>
                   <span
                     className={`mt-1 inline-block rounded px-1.5 py-0.5 text-[10px] ${
-                      s.status.includes("Live") ? "bg-emerald-900/60 text-emerald-400" : "bg-[#2A2724] text-[#7A7064]"
+                      s.live ? "bg-emerald-900/60 text-emerald-400" : "bg-[#2A2724] text-[#7A7064]"
                     }`}
                   >
-                    {s.status}
+                    {s.live ? t.live : t.off}
                   </span>
                 </div>
               );
@@ -534,10 +673,10 @@ export default function XiuLiveStore() {
       {/* 商品列表 */}
       <main className="mx-auto max-w-6xl px-6 pb-24">
         {grouped.map(({ category, items }) => (
-          <section key={category} id={category} className="mb-14 scroll-mt-20">
+          <section key={category.id} id={category.id} className="mb-14 scroll-mt-20">
             <div className="mb-6 flex items-baseline justify-between border-b border-[#2A2724] pb-3">
-              <h2 className="font-serif text-2xl text-[#D9A441]">{category}</h2>
-              <span className="text-sm text-[#7A7064]">{items.length} 件礼物</span>
+              <h2 className="font-serif text-2xl text-[#D9A441]">{lang === "zh" ? category.zh : category.en}</h2>
+              <span className="text-sm text-[#7A7064]">{t.giftsCount(items.length)}</span>
             </div>
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
               {items.map((p) => (
@@ -553,33 +692,45 @@ export default function XiuLiveStore() {
         <div className="absolute inset-0 bg-black/50" onClick={() => setCartOpen(false)} />
         <aside className={`absolute right-0 top-0 h-full w-full max-w-sm bg-[#1F1C19] p-6 shadow-2xl transition-transform ${cartOpen ? "translate-x-0" : "translate-x-full"}`}>
           <div className="flex items-center justify-between">
-            <h3 className="font-serif text-xl text-[#D9A441]">打赏礼物清单</h3>
-            <button onClick={() => setCartOpen(false)} className="text-sm text-[#7A7064]">关闭 ✕</button>
+            <h3 className="font-serif text-xl text-[#D9A441]">{t.cartTitle}</h3>
+            <button onClick={() => setCartOpen(false)} className="text-sm text-[#7A7064]">{t.close}</button>
           </div>
 
           {cart.length === 0 ? (
-            <p className="mt-10 text-sm text-[#7A7064]">尚未选择打赏礼物。</p>
+            <p className="mt-10 text-sm text-[#7A7064]">{t.emptyCart}</p>
           ) : (
             <div className="mt-6 space-y-4 max-h-[calc(100vh-220px)] overflow-y-auto">
               {cart.map((item) => (
                 <div key={`${item.id}-${item.receiver}`} className="flex items-center justify-between border-b border-[#2A2724] pb-3 text-sm">
                   <div>
                     <p className="font-medium text-[#F2E9DC]">{item.name}</p>
-                    <p className="text-xs text-[#D9A441]">受赠主播: {item.receiver}</p>
+                    <p className="text-xs text-[#D9A441]">→ {item.receiver}</p>
                     <p className="text-xs text-[#7A7064]">
-                      数量 {item.qty} · <Money value={item.price} />
+                      {t.qty} {item.qty} · <Money value={item.price} />
                     </p>
                   </div>
                   <button onClick={() => removeFromCart(item.id, item.receiver)} className="text-xs text-[#7A7064] hover:text-[#D9A441]">
-                    移除
+                    {t.remove}
                   </button>
                 </div>
               ))}
               <div className="flex items-center justify-between pt-2 font-serif text-lg">
-                <span>合计打赏</span>
+                <span>{t.total}</span>
                 <span className="text-[#D9A441]"><Money value={cartTotal} /></span>
               </div>
-              <PayPalCheckout total={cartTotal} onSuccess={handlePaymentSuccess} />
+
+              <div className="mt-3">
+                <label className="block text-[11px] text-[#7A7064] mb-1">{t.buyerNameLabel}</label>
+                <input
+                  type="text"
+                  value={buyerName}
+                  onChange={(e) => setBuyerName(e.target.value)}
+                  placeholder={t.buyerNamePlaceholder}
+                  className="w-full rounded-sm border border-[#443F3A] bg-[#181614] px-2 py-1.5 text-sm text-[#F2E9DC] focus:outline-none focus:border-[#D9A441]"
+                />
+              </div>
+
+              <PayPalCheckout total={cartTotal} buyerName={buyerName} onSuccess={handlePaymentSuccess} />
             </div>
           )}
         </aside>
@@ -590,21 +741,26 @@ export default function XiuLiveStore() {
         <div className="absolute inset-0 bg-black/50" onClick={() => setOrdersOpen(false)} />
         <aside className={`absolute right-0 top-0 h-full w-full max-w-md bg-[#1F1C19] p-6 shadow-2xl transition-transform ${ordersOpen ? "translate-x-0" : "translate-x-full"}`}>
           <div className="flex items-center justify-between border-b border-[#2A2724] pb-4">
-            <h3 className="font-serif text-xl text-[#D9A441]">历史打赏订单记录</h3>
-            <button onClick={() => setOrdersOpen(false)} className="text-sm text-[#7A7064]">关闭 ✕</button>
+            <h3 className="font-serif text-xl text-[#D9A441]">{t.ordersTitle}</h3>
+            <button onClick={() => setOrdersOpen(false)} className="text-sm text-[#7A7064]">{t.close}</button>
           </div>
 
-          {orders.length === 0 ? (
-            <p className="mt-10 text-sm text-[#7A7064]">暂无历史打赏订单。</p>
+          {ordersLoading ? (
+            <p className="mt-10 text-sm text-[#7A7064]">{t.loadingOrders}</p>
+          ) : orders.length === 0 ? (
+            <p className="mt-10 text-sm text-[#7A7064]">{t.noOrders}</p>
           ) : (
             <div className="mt-4 space-y-4 max-h-[calc(100vh-120px)] overflow-y-auto pr-1">
               {orders.map((ord) => (
-                <div key={ord.orderId} className="rounded border border-[#2A2724] bg-[#181614] p-3 text-xs">
+                <div key={ord.docId || ord.orderId} className="rounded border border-[#2A2724] bg-[#181614] p-3 text-xs">
                   <div className="flex justify-between text-[#7A7064] mb-2">
-                    <span>订单号: {ord.orderId}</span>
+                    <span>{t.orderIdLabel}: {ord.orderId}</span>
                     <span className="text-emerald-400 font-semibold">{ord.status}</span>
                   </div>
-                  <p className="text-[#A79A87] mb-2">时间: {ord.date}</p>
+                  {ord.buyerName && (
+                    <p className="text-[#D9A441] mb-1">{t.buyerLabel}: {ord.buyerName}</p>
+                  )}
+                  <p className="text-[#A79A87] mb-2">{t.timeLabel}: {ord.date}</p>
                   <div className="space-y-1.5 border-t border-[#2A2724] pt-2">
                     {ord.items.map((it, idx) => (
                       <div key={idx} className="flex justify-between text-[#F2E9DC]">
@@ -614,7 +770,7 @@ export default function XiuLiveStore() {
                     ))}
                   </div>
                   <div className="mt-2 text-right border-t border-[#2A2724] pt-2 font-semibold text-[#D9A441]">
-                    总付费: ${ord.totalAmount.toFixed(2)} USD
+                    {t.totalPaidLabel}: ${ord.totalAmount.toFixed(2)} USD
                   </div>
                 </div>
               ))}
@@ -631,21 +787,45 @@ export default function XiuLiveStore() {
               autoFocus
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="搜索打赏礼物..."
+              placeholder={t.searchPlaceholder}
               className="w-full border-b border-[#443F3A] bg-transparent pb-3 font-serif text-2xl text-[#F2E9DC] focus:outline-none"
             />
             <div className="mt-6 space-y-2 max-h-96 overflow-y-auto">
               {searchResults.map((p) => (
                 <div key={p.id} className="flex items-center justify-between text-sm py-2 border-b border-[#2A2724]">
-                  <span>{p.name}</span>
+                  <span>{lang === "zh" ? p.nameZh : p.nameEn}</span>
                   <span className="text-[#D9A441]"><Money value={p.salePrice ?? p.price} /></span>
                 </div>
               ))}
             </div>
-            <button onClick={() => setSearchOpen(false)} className="mt-6 text-xs text-[#7A7064]">关闭 ✕</button>
+            <button onClick={() => setSearchOpen(false)} className="mt-6 text-xs text-[#7A7064]">{t.close}</button>
           </div>
         </div>
       )}
     </div>
+  );
+}
+
+// 右上角的语言切换按钮：显示的是"切换到哪个语言"，点一下就换。
+function LangToggle() {
+  const { lang, setLang } = useContext(LangContext);
+  return (
+    <button
+      onClick={() => setLang(lang === "zh" ? "en" : "zh")}
+      className="rounded-sm border border-[#443F3A] px-2.5 py-1 text-xs font-semibold text-[#D9A441] hover:border-[#D9A441] transition-colors"
+    >
+      {lang === "zh" ? "EN" : "中文"}
+    </button>
+  );
+}
+
+export default function XiuLiveStore() {
+  const [lang, setLang] = useState("zh");
+  const value = useMemo(() => ({ lang, setLang, t: UI_TEXT[lang] }), [lang]);
+
+  return (
+    <LangContext.Provider value={value}>
+      <StoreContent />
+    </LangContext.Provider>
   );
 }
