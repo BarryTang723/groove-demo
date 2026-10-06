@@ -38,6 +38,7 @@ import noodles from "./pic/noodles.webp";
 
 import star from "./pic/Avatar/star.jpeg";
 import judy from "./pic/Avatar/judy.jpg";
+import scarlett from "./pic/Avatar/scarlett.jpg";
 
 // food
 import cake from "./pic/cake_1.jpg";
@@ -190,6 +191,7 @@ const IMAGE_MAP = {
 const AVATAR_MAP = {
   s1: star,
   s2: judy,
+  s3: scarlett,
 };
 
 
@@ -384,6 +386,12 @@ const STREAMERS = [
     room: "sirens520",
     live: true,
   },
+  {
+    id: "s3",
+    name: "scarlett",
+    room: "sirens520",
+    live: true,
+  },
 ];
 
 
@@ -573,25 +581,25 @@ const PRODUCTS = [
     art: "#5F574C",
   },
 
-  {
-    id: "f19",
-    nameZh: "测试食物 1",
-    nameEn: "Test Food 1",
-    category: "food",
-    price: 1,
-    salePrice: 0.7,
-    art: "#D9A441",
-  },
+  // {
+  //   id: "f19",
+  //   nameZh: "测试食物 1",
+  //   nameEn: "Test Food 1",
+  //   category: "food",
+  //   price: 1,
+  //   salePrice: 0.7,
+  //   art: "#D9A441",
+  // },
 
-  {
-    id: "f20",
-    nameZh: "测试食物 2",
-    nameEn: "Test Food 2",
-    category: "food",
-    price: 0.01,
-    salePrice: 0.007,
-    art: "#8C5E3C",
-  },
+  // {
+  //   id: "f20",
+  //   nameZh: "测试食物 2",
+  //   nameEn: "Test Food 2",
+  //   category: "food",
+  //   price: 0.01,
+  //   salePrice: 0.007,
+  //   art: "#8C5E3C",
+  // },
 
   {
     id: "f21",
