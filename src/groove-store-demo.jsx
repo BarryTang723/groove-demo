@@ -39,6 +39,9 @@ import noodles from "./pic/noodles.webp";
 import star from "./pic/Avatar/star.jpeg";
 import judy from "./pic/Avatar/judy.jpg";
 import scarlett from "./pic/Avatar/scarlett.jpg";
+import becky from "./pic/Avatar/becky.jpg";
+import luna from "./pic/Avatar/luna.jpg";
+
 
 // food
 import cake from "./pic/cake_1.jpg";
@@ -96,6 +99,7 @@ import boyfriendPOV from "./pic/boyfrined_POV.jpg";
 import blackEgg from "./pic/blackegg.png";
 import testFood1 from "./pic/test.jpg";
 import testFood2 from "./pic/test.jpg";
+import hotSpring from "./pic/hot_spring.png";
 
 // punishment
 import turnOffFilter from "./pic/turn_off_filter.jpg";
@@ -173,6 +177,7 @@ const IMAGE_MAP = {
   e21: facePainting,
   e22: halfDayOff,
   e23: chairDance,
+  e24: hotSpring,
 
   // punishment
   p1: turnOffFilter,
@@ -192,6 +197,8 @@ const AVATAR_MAP = {
   s1: star,
   s2: judy,
   s3: scarlett,
+  s4: becky,
+  s5: luna
 };
 
 
@@ -377,20 +384,32 @@ const STREAMERS = [
   {
     id: "s1",
     name: "star",
-    room: "sirens520",
+    room: "mariealianna",
     live: true,
   },
   {
     id: "s2",
     name: "judy",
-    room: "sirens520",
+    room: "mariealianna",
     live: true,
   },
   {
     id: "s3",
     name: "scarlett",
-    room: "sirens520",
+    room: "mariealianna",
     live: true,
+  },
+  {
+  id: "s4",
+  name: "becky",
+  room: "mariealianna",
+  live: true,
+  },
+  {
+  id: "s5",
+  name: "luna",
+  room: "mariealianna",
+  live: true,
   },
 ];
 
@@ -953,6 +972,15 @@ const PRODUCTS = [
     salePrice: 27,
     art: "#C97B4A",
   },
+  {
+  id: "e24",
+  nameZh: "温泉",
+  nameEn: "Hot Spring",
+  category: "events",
+  price: 350,
+  salePrice: 350,
+  art: "#3E6259",
+},
 
   // punishment
   {
