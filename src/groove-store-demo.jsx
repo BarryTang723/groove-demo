@@ -15,6 +15,8 @@ import {
   addDoc,
   onSnapshot,
   query as fsQuery,
+  where,
+  Timestamp,
   orderBy,
   serverTimestamp,
 } from "firebase/firestore";
@@ -1594,12 +1596,18 @@ function StoreContent() {
   const { lang, t } =
     useLang();
 
+  // 隐藏管理员入口：直接访问 /xnxi
+  const isAdminPage =
+    typeof window !== "undefined" &&
+    window.location.pathname.replace(/\/+$/, "") === "/xnxi";
+
 
   const [cartOpen, setCartOpen] =
     useState(false);
 
+  // 管理员入口打开时，自动显示完整订单
   const [ordersOpen, setOrdersOpen] =
-    useState(false);
+    useState(isAdminPage);
 
   const [searchOpen, setSearchOpen] =
     useState(false);
@@ -1627,10 +1635,25 @@ function StoreContent() {
 
   useEffect(() => {
 
-    const q = fsQuery(
-      collection(db, "orders"),
-      orderBy("createdAt", "desc")
-    );
+    const ordersRef = collection(db, "orders");
+
+    // 普通页面只查询最近 7 天；/xnxi 查询全部历史订单
+    const q = isAdminPage
+      ? fsQuery(
+          ordersRef,
+          orderBy("createdAt", "desc")
+        )
+      : fsQuery(
+          ordersRef,
+          where(
+            "createdAt",
+            ">=",
+            Timestamp.fromDate(
+              new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+            )
+          ),
+          orderBy("createdAt", "desc")
+        );
 
 
     const unsubscribe =
@@ -1666,7 +1689,7 @@ function StoreContent() {
     return () =>
       unsubscribe();
 
-  }, []);
+  }, [isAdminPage]);
 
 
   // -------------------------------------------------------------------------
@@ -2367,7 +2390,9 @@ function StoreContent() {
           <div className="flex items-center justify-between border-b border-[#2A2724] pb-4">
 
             <h3 className="font-serif text-xl text-[#D9A441]">
-              {t.ordersTitle}
+              {isAdminPage
+                ? (lang === "zh" ? "全部订单（管理员）" : "All Orders (Admin)")
+                : t.ordersTitle}
             </h3>
 
 

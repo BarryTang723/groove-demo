@@ -1,4 +1,4 @@
-import GrooveStoreDemo from "./groove-store-demo.jsx";
+import GrooveStoreDemo from "./XiuLiveApp.jsx";
 
 function App() {
   return <GrooveStoreDemo />;
