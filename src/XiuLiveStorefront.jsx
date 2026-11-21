@@ -910,8 +910,8 @@ const PRODUCTS = [
     nameZh: "独舞 3 分钟",
     nameEn: "Solo Dance (3 min)",
     category: "events",
-    price: 300,
-    salePrice: 180,
+    price: 30,
+    salePrice: 18,
     art: "#6B4E71",
   },
 
